@@ -17,11 +17,10 @@ URL = st.secrets["ODOO_URL"]
 DB = st.secrets["ODOO_DB"]            
 USER = st.secrets["ODOO_USER"]
 PASS = st.secrets["ODOO_PASS"]
-api_key=st.secrets["GEMINI_API_KEY"]
+API = st.secrets["GEMINI_API_KEY"]
 
 unverified_context = ssl._create_unverified_context()
-ai_client = genai.Client(api_key) # تأكد من أن مفتاح API معرف مسبقاً
-
+ai_client = genai.Client(api_key=API)
 
 # Set up the title of your web app
 st.title("Odoo Product Fetcher 📦")
