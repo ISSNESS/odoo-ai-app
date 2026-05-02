@@ -1,5 +1,5 @@
-requests
 streamlit
 google-genai
 python-docx
 Pillow
+rembg
