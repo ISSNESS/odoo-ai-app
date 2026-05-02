@@ -21,10 +21,10 @@ URL = st.secrets["ODOO_URL"]
 DB = st.secrets["ODOO_DB"]            
 USER = st.secrets["ODOO_USER"]
 PASS = st.secrets["ODOO_PASS"]
-API = st.secrets["GEMINI_API_KEY"]
+GEMINI_API_KEY  = st.secrets["GEMINI_API_KEY"]
 
 unverified_context = ssl._create_unverified_context()
-ai_client = genai.Client(api_key=API)
+ai_client = genai.Client(api_key=GEMINI_API_KEY )
 
 # ==========================================
 # ⚙️ IMAGE PROCESSING FUNCTION (In-Memory)
