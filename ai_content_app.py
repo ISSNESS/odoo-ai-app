@@ -327,7 +327,6 @@ if st.session_state.connected:
                                                         
                                                         if result:
                                                             st.success(f"✅ Image successfully uploaded to '{selected_product['name']}'!")
-                                                            st.balloons()
                                                         else:
                                                             st.error("❌ Failed to update image. Check your permissions.")
                                                     else:
