@@ -1,4 +1,5 @@
 
+import requests # Make sure to add this at the top!
 import streamlit as st
 import xmlrpc.client
 import ssl
@@ -14,6 +15,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 import os
 import re
 
+
 gemini_model = 'gemini-2.5-flash-lite' 
 
 # --- YOUR DETAILS SECURED ---
@@ -22,6 +24,7 @@ DB = st.secrets["ODOO_DB"]
 USER = st.secrets["ODOO_USER"]
 PASS = st.secrets["ODOO_PASS"]
 GEMINI_API_KEY  = st.secrets["GEMINI_API_KEY"]
+REMOVE_BG_KEY = "ODOO_REMOVE"
 
 unverified_context = ssl._create_unverified_context()
 ai_client = genai.Client(api_key=GEMINI_API_KEY )
@@ -30,15 +33,22 @@ ai_client = genai.Client(api_key=GEMINI_API_KEY )
 # ⚙️ IMAGE PROCESSING FUNCTION (In-Memory)
 # ==========================================
 def create_premium_amazon_listing(input_bytes, product_scale=0.85):
-    return input_bytes  # This skips ALL the heavy processing!
-    """Takes image bytes, removes BG, adds studio lighting, and returns new image bytes."""
+    """Takes image bytes, uses API to remove BG, adds studio lighting, and returns new image bytes."""
     TARGET_SIZE = (1080, 1080)
     
-    # --- NEW: Tell rembg to use the lightweight, low-memory model ---
-    my_session = new_session("u2netp")
+    # 1. Extract Product using Remove.bg API (Offloading the heavy lifting!)
+    response = requests.post(
+        'https://api.remove.bg/v1.0/removebg',
+        files={'image_file': ('image.jpg', input_bytes)},
+        data={'size': 'auto'},
+        headers={'X-Api-Key': st.secrets["REMOVE_BG_KEY"]},
+    )
     
-    # 1. Extract Product using the lightweight session
-    output_bytes = remove(input_bytes, session=my_session)
+    if response.status_code != 200:
+        st.error(f"Background removal failed: {response.text}")
+        return None # Stops the function if the API fails
+        
+    output_bytes = response.content
     product = Image.open(io.BytesIO(output_bytes)).convert("RGBA")
 
     # 2. Resize Product
