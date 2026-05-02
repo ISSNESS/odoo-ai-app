@@ -356,6 +356,8 @@ if st.session_state.connected:
                                         
                                         elif content_type == "🛒 Webstore Description":
                                             p_category = selected_product.get('categ_id', [0, 'General'])[1] if isinstance(selected_product.get('categ_id'), list) else 'General'
+                                            
+                                            # Updated Prompt to include dividers for easy text splitting
                                             prompt_text = f"""
                                             Act as an expert E-commerce copywriter. 
                                             Product Information:
@@ -363,24 +365,27 @@ if st.session_state.connected:
                                             - Category: {p_category}
                                             Task: Write exactly 5 compelling Bullet Points highlighting the key features and benefits of this product. 
                                             You must provide the exact same 5 points first in Arabic, and then translated to French.
-                                            Strict Format to follow exactly:
-                                            [Bullet point 1]
-                                            [Bullet point 2]
-                                            [Bullet point 3]
-                                            [Bullet point 4]
-                                            [Bullet point 5]
                                             
-                                            [Bullet point 1]
-                                            [Bullet point 2]
-                                            [Bullet point 3]
-                                            [Bullet point 4]
-                                            [Bullet point 5]
                                             Strict Rules:
                                             1. Use emojis at the beginning of each bullet point in both languages.
                                             2. DO NOT mention any prices.
                                             3. DO NOT write a product title.
                                             4. DO NOT write any introductory or concluding sentences.
-                                            5. Output ONLY the requested format with the bullet points, nothing else.
+                                            5. Format exactly as shown below with the exact dividers.
+                                            
+                                            Strict Format to follow exactly:
+                                            ---ARABIC---
+                                            [Bullet point 1]
+                                            [Bullet point 2]
+                                            [Bullet point 3]
+                                            [Bullet point 4]
+                                            [Bullet point 5]
+                                            ---FRENCH---
+                                            [Bullet point 1]
+                                            [Bullet point 2]
+                                            [Bullet point 3]
+                                            [Bullet point 4]
+                                            [Bullet point 5]
                                             """
 
                                         max_retries = 3
@@ -390,7 +395,23 @@ if st.session_state.connected:
                                                     model=gemini_model,
                                                     contents=[prompt_text]
                                                 )
-                                                st.session_state[session_text_key] = response.text
+                                                
+                                                full_text = response.text
+                                                
+                                                # Parse the output into two separate variables
+                                                try:
+                                                    # Extract text between the dividers
+                                                    ar_text = full_text.split("---ARABIC---")[1].split("---FRENCH---")[0].strip()
+                                                    fr_text = full_text.split("---FRENCH---")[1].strip()
+                                                except IndexError:
+                                                    # Fallback in case the AI messes up the formatting
+                                                    ar_text = full_text
+                                                    fr_text = ""
+                                                
+                                                # Save both to session state
+                                                st.session_state[f"ar_{session_text_key}"] = ar_text
+                                                st.session_state[f"fr_{session_text_key}"] = fr_text
+                                                
                                                 st.success("✨ Generation complete!")
                                                 break
                                                 
@@ -402,36 +423,63 @@ if st.session_state.connected:
                                                     st.error(f"Failed to generate text: {e}")
                                                     break
 
-                                if session_text_key in st.session_state:
-                                    st.write("### 📝 Review & Edit")
+                                # Display the UI for editing if the keys exist in session state
+                                if f"ar_{session_text_key}" in st.session_state and f"fr_{session_text_key}" in st.session_state:
+                                    st.write("### 📝 Review & Edit Descriptions")
                                     
-                                    edited_text = st.text_area(
-                                        "You can edit the text below before saving it to Odoo:", 
-                                        value=st.session_state[session_text_key], 
-                                        height=350
-                                    )
+                                    # Create two columns or two text areas for separate editing
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        edited_ar = st.text_area(
+                                            "🇸🇦 Arabic Description", 
+                                            value=st.session_state[f"ar_{session_text_key}"], 
+                                            height=250
+                                        )
+                                    with col2:
+                                        edited_fr = st.text_area(
+                                            "🇫🇷 French Description", 
+                                            value=st.session_state[f"fr_{session_text_key}"], 
+                                            height=250
+                                        )
                                     
-                                    if st.button("💾 Save Description to Odoo", type="primary", use_container_width=True):
-                                        with st.spinner("Uploading to Odoo..."):
+                                    if st.button("💾 Save Translations to Odoo", type="primary", use_container_width=True):
+                                        with st.spinner("Uploading translations to Odoo..."):
                                             try:
                                                 common = xmlrpc.client.ServerProxy('{}/xmlrpc/2/common'.format(URL), context=unverified_context)
                                                 uid = common.authenticate(DB, USER, PASS, {})
                                                 
                                                 if uid:
                                                     models = xmlrpc.client.ServerProxy('{}/xmlrpc/2/object'.format(URL), context=unverified_context)
-                                                    formatted_for_web = edited_text.replace('\n', '<br>')
                                                     
-                                                    update_data = {'website_description': formatted_for_web}
-                                                    result = models.execute_kw(
+                                                    formatted_ar = edited_ar.replace('\n', '<br>')
+                                                    formatted_fr = edited_fr.replace('\n', '<br>')
+                                                    
+                                                    # Note: Check your exact Odoo language codes (Settings -> Translations -> Languages)
+                                                    # Standard Arabic is usually 'ar_001' or 'ar_SY', 'ar_SA' etc. 
+                                                    # Standard French is usually 'fr_FR' or 'fr_BE'.
+                                                    odoo_lang_ar = 'ar_001' 
+                                                    odoo_lang_fr = 'fr_FR'  
+                                                    
+                                                    # 1. Update the Arabic translation by passing the Arabic context
+                                                    result_ar = models.execute_kw(
                                                         DB, uid, PASS, 
                                                         'product.template', 'write', 
-                                                        [[selected_product['id']], update_data]
+                                                        [[selected_product['id']], {'website_description': formatted_ar}],
+                                                        {'context': {'lang': odoo_lang_ar}}
                                                     )
                                                     
-                                                    if result:
-                                                        st.success(f"✅ Successfully updated the description for '{selected_product['name']}' in Odoo!")
+                                                    # 2. Update the French translation by passing the French context
+                                                    result_fr = models.execute_kw(
+                                                        DB, uid, PASS, 
+                                                        'product.template', 'write', 
+                                                        [[selected_product['id']], {'website_description': formatted_fr}],
+                                                        {'context': {'lang': odoo_lang_fr}}
+                                                    )
+                                                    
+                                                    if result_ar and result_fr:
+                                                        st.success(f"✅ Successfully updated Arabic & French descriptions for '{selected_product['name']}' in Odoo!")
                                                     else:
-                                                        st.error("❌ Failed to update Odoo. Check your permissions.")
+                                                        st.error("❌ Partial or full failure updating Odoo. Check your permissions.")
                                                 else:
                                                     st.error("❌ Odoo Authentication failed. Please check your Email and Password in the secrets.")
                                                     
