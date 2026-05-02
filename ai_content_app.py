@@ -4,7 +4,7 @@ import xmlrpc.client
 import ssl
 import base64
 import io
-from rembg import remove, new_session
+#from rembg import remove, new_session
 from PIL import Image, ImageDraw, ImageFilter
 import time  # <--- Added for waiting
 from google import genai
@@ -30,6 +30,7 @@ ai_client = genai.Client(api_key=API)
 # ⚙️ IMAGE PROCESSING FUNCTION (In-Memory)
 # ==========================================
 def create_premium_amazon_listing(input_bytes, product_scale=0.85):
+    return input_bytes  # This skips ALL the heavy processing!
     """Takes image bytes, removes BG, adds studio lighting, and returns new image bytes."""
     TARGET_SIZE = (1080, 1080)
     
