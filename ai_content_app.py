@@ -23,7 +23,7 @@ DB = st.secrets["ODOO_DB"]
 USER = st.secrets["ODOO_USER"]
 PASS = st.secrets["ODOO_PASS"]
 GEMINI_API_KEY  = st.secrets["GEMINI_API_KEY"]
-REMOVE_BG_KEY = "ODOO_REMOVE"
+
 
 
 unverified_context = ssl._create_unverified_context()
@@ -337,157 +337,191 @@ if st.session_state.connected:
                             # =========================================================
                             # --- TEXT GENERATION BLOCK ---
                             # =========================================================
-                            if content_type in ["🛒 Webstore Description", "📱 Social Media Post"]:
-                                st.divider()
-                                session_text_key = f"generated_text_{selected_product['id']}"
-
-                                if st.button(f"✨ Generate Content", use_container_width=True):
-                                    with st.spinner(f"Generating content for {selected_product['name']}..."):
-                                        p_name = selected_product['name']
-                                        p_price = selected_product['list_price']
+                            elif content_type == "🛒 Webstore Description":
+                                
+                                # Define your Odoo language codes (Check Settings -> Translations -> Languages in Odoo if unsure)
+                                odoo_lang_ar = 'ar_001' 
+                                odoo_lang_fr = 'fr_FR'
+                                
+                                with st.spinner("Checking Odoo for existing translations..."):
+                                    try:
+                                        common = xmlrpc.client.ServerProxy('{}/xmlrpc/2/common'.format(URL), context=unverified_context)
+                                        uid = common.authenticate(DB, USER, PASS, {})
+                                        models = xmlrpc.client.ServerProxy('{}/xmlrpc/2/object'.format(URL), context=unverified_context)
                                         
-                                        if content_type == "📱 Social Media Post":
-                                            base_instruction = "أنت مسوق إلكتروني محترف تستهدف السوق الجزائري. اذكر دائماً أن التوصيل متوفر لـ 58 ولاية والدفع عند الاستلام."
-                                            if SELECTED_MODE == 1: prompt_text = f"{base_instruction}\nاكتب إعلاناً قصيراً ومباشراً لمنتج {p_name} بسعر {p_price} دج. ركز على أن الكمية محدودة جداً وأنها فرصة لا تعوض."        
-                                            elif SELECTED_MODE == 2: prompt_text = f"{base_instruction}\nاكتب منشوراً تسويقياً بلهجة جزائرية مفهومة يطرح مشكلة شائعة، وقدم {p_name} كحل عملي."
-                                            elif SELECTED_MODE == 3: prompt_text = f"{base_instruction}\nاكتب منشوراً إعلانياً لترويج {p_name} لبناء الثقة وكسر حاجز الخوف من الاحتيال. استخدم عبارات تطمئن المشتري."
-                                            elif SELECTED_MODE == 4: prompt_text = f"{base_instruction}\nاكتب منشوراً فيسبوك فكاهياً لترويج {p_name} واربطه بمواقف طريفة من الحياة اليومية في الجزائر."
-                                            elif SELECTED_MODE == 5: prompt_text = f"{base_instruction}\nاكتب منشوراً تسويقياً يشرح كيف يمكن لمنتج {p_name} أن يوفر المال والجهد باستخدامات متعددة."
+                                        # 1. Read French (Base)
+                                        prod_fr = models.execute_kw(
+                                            DB, uid, PASS, 'product.template', 'read', 
+                                            [[selected_product['id']]], 
+                                            {'fields': ['name', 'website_description'], 'context': {'lang': odoo_lang_fr}}
+                                        )[0]
                                         
-                                        elif content_type == "🛒 Webstore Description":
-                                            p_category = selected_product.get('categ_id', [0, 'General'])[1] if isinstance(selected_product.get('categ_id'), list) else 'General'
-                                            
-                                            # Updated Prompt to include dividers for easy text splitting
-                                            prompt_text = f"""
-                                            Act as an expert E-commerce copywriter. 
-                                            Product Information:
-                                            - Product Name: {p_name}
-                                            - Category: {p_category}
-                                            Task: Write exactly 5 compelling Bullet Points highlighting the key features and benefits of this product. 
-                                            You must provide the exact same 5 points first in Arabic, and then translated to French.
-                                            
-                                            Strict Rules:
-                                            1. Use emojis at the beginning of each bullet point in both languages.
-                                            2. DO NOT mention any prices.
-                                            3. DO NOT write a product title.
-                                            4. DO NOT write any introductory or concluding sentences.
-                                            5. Format exactly as shown below with the exact dividers.
-                                            
-                                            Strict Format to follow exactly:
-                                            ---ARABIC---
-                                            [Bullet point 1]
-                                            [Bullet point 2]
-                                            [Bullet point 3]
-                                            [Bullet point 4]
-                                            [Bullet point 5]
-                                            ---FRENCH---
-                                            [Bullet point 1]
-                                            [Bullet point 2]
-                                            [Bullet point 3]
-                                            [Bullet point 4]
-                                            [Bullet point 5]
-                                            """
-
-                                        max_retries = 3
-                                        for attempt in range(max_retries):
-                                            try:
-                                                response = ai_client.models.generate_content(
-                                                    model=gemini_model,
-                                                    contents=[prompt_text]
-                                                )
-                                                
-                                                full_text = response.text
-                                                
-                                                # Parse the output into two separate variables
-                                                try:
-                                                    # Extract text between the dividers
-                                                    ar_text = full_text.split("---ARABIC---")[1].split("---FRENCH---")[0].strip()
-                                                    fr_text = full_text.split("---FRENCH---")[1].strip()
-                                                except IndexError:
-                                                    # Fallback in case the AI messes up the formatting
-                                                    ar_text = full_text
-                                                    fr_text = ""
-                                                
-                                                # Save both to session state
-                                                st.session_state[f"ar_{session_text_key}"] = ar_text
-                                                st.session_state[f"fr_{session_text_key}"] = fr_text
-                                                
-                                                st.success("✨ Generation complete!")
-                                                break
-                                                
-                                            except Exception as e:
-                                                if "429" in str(e):
-                                                    st.toast(f"⚠️ Limit hit. Waiting 30 seconds...")
-                                                    time.sleep(30)
-                                                else:
-                                                    st.error(f"Failed to generate text: {e}")
-                                                    break
-
-                                # Display the UI for editing if the keys exist in session state
-                                if f"ar_{session_text_key}" in st.session_state and f"fr_{session_text_key}" in st.session_state:
-                                    st.write("### 📝 Review & Edit Descriptions")
+                                        # 2. Read Arabic
+                                        prod_ar = models.execute_kw(
+                                            DB, uid, PASS, 'product.template', 'read', 
+                                            [[selected_product['id']]], 
+                                            {'fields': ['name', 'website_description'], 'context': {'lang': odoo_lang_ar}}
+                                        )[0]
+                                        
+                                    except Exception as e:
+                                        st.error(f"⚠️ Failed to connect to Odoo to check translations: {e}")
+                                        st.stop() # Stop execution if we can't reach Odoo
+                                
+                                # 3. Check if Arabic exists (If it matches French exactly, it's just Odoo's fallback)
+                                has_arabic_name = prod_ar.get('name') != prod_fr.get('name') and bool(prod_ar.get('name'))
+                                has_arabic_desc = prod_ar.get('website_description') != prod_fr.get('website_description') and bool(prod_ar.get('website_description'))
+                                
+                                if has_arabic_name and has_arabic_desc:
+                                    st.success("✅ This product already has a complete Arabic translation! No AI generation needed.")
                                     
-                                    # Create two columns or two text areas for separate editing
+                                    # Show the user what is currently in Odoo
                                     col1, col2 = st.columns(2)
                                     with col1:
-                                        edited_ar = st.text_area(
-                                            "🇸🇦 Arabic Description", 
-                                            value=st.session_state[f"ar_{session_text_key}"], 
-                                            height=250
-                                        )
+                                        st.info("🇸🇦 **Current Arabic Info**")
+                                        st.write(f"**Name:** {prod_ar.get('name')}")
+                                        with st.expander("View Arabic Description"):
+                                            st.markdown(prod_ar.get('website_description') or "No description", unsafe_allow_html=True)
                                     with col2:
-                                        edited_fr = st.text_area(
-                                            "🇫🇷 French Description", 
-                                            value=st.session_state[f"fr_{session_text_key}"], 
-                                            height=250
-                                        )
+                                        st.info("🇫🇷 **Current French Info**")
+                                        st.write(f"**Name:** {prod_fr.get('name')}")
+                                        with st.expander("View French Description"):
+                                            st.markdown(prod_fr.get('website_description') or "No description", unsafe_allow_html=True)
                                     
-                                    if st.button("💾 Save Translations to Odoo", type="primary", use_container_width=True):
-                                        with st.spinner("Uploading translations to Odoo..."):
-                                            try:
-                                                common = xmlrpc.client.ServerProxy('{}/xmlrpc/2/common'.format(URL), context=unverified_context)
-                                                uid = common.authenticate(DB, USER, PASS, {})
-                                                
-                                                if uid:
-                                                    models = xmlrpc.client.ServerProxy('{}/xmlrpc/2/object'.format(URL), context=unverified_context)
-                                                    
-                                                    formatted_ar = edited_ar.replace('\n', '<br>')
-                                                    formatted_fr = edited_fr.replace('\n', '<br>')
-                                                    
-                                                    # Note: Check your exact Odoo language codes (Settings -> Translations -> Languages)
-                                                    # Standard Arabic is usually 'ar_001' or 'ar_SY', 'ar_SA' etc. 
-                                                    # Standard French is usually 'fr_FR' or 'fr_BE'.
-                                                    odoo_lang_ar = 'ar_001' 
-                                                    odoo_lang_fr = 'fr_FR'  
-                                                    
-                                                    # 1. Update the Arabic translation by passing the Arabic context
-                                                    result_ar = models.execute_kw(
-                                                        DB, uid, PASS, 
-                                                        'product.template', 'write', 
-                                                        [[selected_product['id']], {'website_description': formatted_ar}],
-                                                        {'context': {'lang': odoo_lang_ar}}
-                                                    )
-                                                    
-                                                    # 2. Update the French translation by passing the French context
-                                                    result_fr = models.execute_kw(
-                                                        DB, uid, PASS, 
-                                                        'product.template', 'write', 
-                                                        [[selected_product['id']], {'website_description': formatted_fr}],
-                                                        {'context': {'lang': odoo_lang_fr}}
-                                                    )
-                                                    
-                                                    if result_ar and result_fr:
-                                                        st.success(f"✅ Successfully updated Arabic & French descriptions for '{selected_product['name']}' in Odoo!")
-                                                    else:
-                                                        st.error("❌ Partial or full failure updating Odoo. Check your permissions.")
-                                                else:
-                                                    st.error("❌ Odoo Authentication failed. Please check your Email and Password in the secrets.")
-                                                    
-                                            except Exception as e:
-                                                st.error(f"⚠️ Odoo Connection Error: {e}")
+                                else:
+                                    st.warning("⚠️ Missing Arabic translation detected. Generating translations...")
+                                    
+                                    p_name = prod_fr.get('name', 'Unknown Product')
+                                    p_category = selected_product.get('categ_id', [0, 'General'])[1] if isinstance(selected_product.get('categ_id'), list) else 'General'
+                                    
+                                    # 4. The AI Prompt
+                                    prompt_text = f"""
+                                    Act as an expert E-commerce copywriter and translator. 
+                                    Product Information:
+                                    - Original French Product Name: {p_name}
+                                    - Category: {p_category}
+                                    
+                                    Task 1: Translate the Product Name into Arabic. Provide the most accurate E-commerce product name.
+                                    Task 2: Write exactly 5 compelling Bullet Points highlighting the key features and benefits of this product. 
+                                    You must provide the exact same 5 points first in Arabic, and then translated to French.
+                                    
+                                    Strict Rules:
+                                    1. Use emojis at the beginning of each bullet point in both languages.
+                                    2. DO NOT mention any prices.
+                                    3. DO NOT write any introductory or concluding sentences.
+                                    4. Format exactly as shown below with the exact dividers. DO NOT change the divider text.
+                                    
+                                    Strict Format to follow exactly:
+                                    ---ARABIC NAME---
+                                    [Translated Product Name in Arabic]
+                                    ---ARABIC DESC---
+                                    [Bullet point 1]
+                                    [Bullet point 2]
+                                    [Bullet point 3]
+                                    [Bullet point 4]
+                                    [Bullet point 5]
+                                    ---FRENCH DESC---
+                                    [Bullet point 1]
+                                    [Bullet point 2]
+                                    [Bullet point 3]
+                                    [Bullet point 4]
+                                    [Bullet point 5]
+                                    """
 
+                                    max_retries = 3
+                                    for attempt in range(max_retries):
+                                        try:
+                                            response = ai_client.models.generate_content(
+                                                model=gemini_model,
+                                                contents=[prompt_text]
+                                            )
+                                            
+                                            full_text = response.text
+                                            
+                                            # 5. Parse the AI Output
+                                            try:
+                                                ar_name = full_text.split("---ARABIC NAME---")[1].split("---ARABIC DESC---")[0].strip()
+                                                ar_desc = full_text.split("---ARABIC DESC---")[1].split("---FRENCH DESC---")[0].strip()
+                                                fr_desc = full_text.split("---FRENCH DESC---")[1].strip()
+                                            except IndexError:
+                                                if attempt < max_retries - 1:
+                                                    continue # Try again if formatting fails
+                                                else:
+                                                    st.error("❌ AI output formatting failed consistently. Please try another product.")
+                                                    st.stop()
+                                            
+                                            # Save to Streamlit Session State
+                                            st.session_state[f"ar_name_{session_text_key}"] = ar_name
+                                            st.session_state[f"ar_desc_{session_text_key}"] = ar_desc
+                                            st.session_state[f"fr_desc_{session_text_key}"] = fr_desc
+                                            
+                                            st.success("✨ AI Generation complete!")
+                                            break
+                                            
+                                        except Exception as e:
+                                            if "429" in str(e):
+                                                st.toast(f"⚠️ Limit hit. Waiting 30 seconds...")
+                                                time.sleep(30)
+                                            else:
+                                                st.error(f"Failed to generate text: {e}")
+                                                break
+
+                                # 6. Display UI for Editing & Saving (Only shows if generation was successful)
+                                if f"ar_desc_{session_text_key}" in st.session_state:
+                                    st.write("### 📝 Review & Edit Content")
+                                    
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        edited_ar_name = st.text_input("🇸🇦 Arabic Product Name", value=st.session_state[f"ar_name_{session_text_key}"])
+                                        edited_ar_desc = st.text_area("🇸🇦 Arabic Description", value=st.session_state[f"ar_desc_{session_text_key}"], height=250)
+                                    with col2:
+                                        # We show the French name so the user knows what they are editing, but we don't need them to change the original
+                                        st.text_input("🇫🇷 Original French Name", value=p_name, disabled=True)
+                                        edited_fr_desc = st.text_area("🇫🇷 French Description", value=st.session_state[f"fr_desc_{session_text_key}"], height=250)
+                                    
+                                    if st.button("💾 Save to Odoo & Enable Arabic", type="primary", use_container_width=True):
+                                        with st.spinner("Uploading formatting and enabling translations in Odoo..."):
+                                            try:
+                                                # Convert normal linebreaks to HTML breaks for the Odoo Website
+                                                formatted_ar = edited_ar_desc.replace('\n', '<br>')
+                                                formatted_fr = edited_fr_desc.replace('\n', '<br>')
+                                                
+                                                # 7a. Write ARABIC Name and Description (This CREATES the translation)
+                                                result_ar = models.execute_kw(
+                                                    DB, uid, PASS, 
+                                                    'product.template', 'write', 
+                                                    [[selected_product['id']], {'name': edited_ar_name, 'website_description': formatted_ar}],
+                                                    {'context': {'lang': odoo_lang_ar}}
+                                                )
+                                                
+                                                # 7b. Write FRENCH Description (Updates the base language)
+                                                result_fr = models.execute_kw(
+                                                    DB, uid, PASS, 
+                                                    'product.template', 'write', 
+                                                    [[selected_product['id']], {'website_description': formatted_fr}],
+                                                    {'context': {'lang': odoo_lang_fr}}
+                                                )
+                                                
+                                                if result_ar and result_fr:
+                                                    st.success(f"✅ Successfully created Arabic translations and updated French descriptions!")
+                                                    st.balloons()
+                                                    
+                                                    # Clear the session state so the UI resets cleanly
+                                                    del st.session_state[f"ar_name_{session_text_key}"]
+                                                    del st.session_state[f"ar_desc_{session_text_key}"]
+                                                    del st.session_state[f"fr_desc_{session_text_key}"]
+                                                    
+                                                    # Force a rerun to show the "Already Translated" success message
+                                                    st.rerun()
+                                                else:
+                                                    st.error("❌ Odoo returned an error during the save process.")
+                                                
+                                            except Exception as e:
+                                                st.error(f"⚠️ Odoo Save Error: {e}")
                     else:
                         st.warning("No products found matching that search term in this category.")
 
         except Exception as e:
             st.error(f"Failed to fetch data from Odoo. Error details: {e}")
+
+REMOVE_BG_KEY = "ODOO_REMOVE"
+
