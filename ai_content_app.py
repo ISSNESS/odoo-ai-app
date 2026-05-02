@@ -338,7 +338,8 @@ if st.session_state.connected:
                             # --- TEXT GENERATION BLOCK ---
                             # =========================================================
                             elif content_type == "🛒 Webstore Description":
-                                
+
+                                session_text_key = f"product_{selected_product['id']}_translation"
                                 # Define your Odoo language codes (Check Settings -> Translations -> Languages in Odoo if unsure)
                                 odoo_lang_ar = 'ar_001' 
                                 odoo_lang_fr = 'fr_FR'
