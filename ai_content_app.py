@@ -4,7 +4,7 @@ import xmlrpc.client
 import ssl
 import base64
 import io
-from rembg import remove
+from rembg import remove, new_session
 from PIL import Image, ImageDraw, ImageFilter
 import time  # <--- Added for waiting
 from google import genai
@@ -33,8 +33,11 @@ def create_premium_amazon_listing(input_bytes, product_scale=0.85):
     """Takes image bytes, removes BG, adds studio lighting, and returns new image bytes."""
     TARGET_SIZE = (1080, 1080)
     
-    # 1. Extract Product
-    output_bytes = remove(input_bytes)
+    # --- NEW: Tell rembg to use the lightweight, low-memory model ---
+    my_session = new_session("u2netp")
+    
+    # 1. Extract Product using the lightweight session
+    output_bytes = remove(input_bytes, session=my_session)
     product = Image.open(io.BytesIO(output_bytes)).convert("RGBA")
 
     # 2. Resize Product
