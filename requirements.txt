@@ -1,4 +1,4 @@
-request
+requests
 streamlit
 google-genai
 python-docx
