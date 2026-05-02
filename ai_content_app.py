@@ -1,11 +1,9 @@
-
-import requests # Make sure to add this at the top!
 import streamlit as st
 import xmlrpc.client
 import ssl
 import base64
 import io
-#from rembg import remove, new_session
+from rembg import remove
 from PIL import Image, ImageDraw, ImageFilter
 import time  # <--- Added for waiting
 from google import genai
@@ -15,9 +13,6 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 import os
 import re
 
-
-gemini_model = 'gemini-2.5-flash-lite' 
-
 # --- YOUR DETAILS SECURED ---
 URL = st.secrets["ODOO_URL"]
 DB = st.secrets["ODOO_DB"]            
@@ -26,29 +21,15 @@ PASS = st.secrets["ODOO_PASS"]
 GEMINI_API_KEY  = st.secrets["GEMINI_API_KEY"]
 REMOVE_BG_KEY = "ODOO_REMOVE"
 
-unverified_context = ssl._create_unverified_context()
-ai_client = genai.Client(api_key=GEMINI_API_KEY )
-
 # ==========================================
 # ⚙️ IMAGE PROCESSING FUNCTION (In-Memory)
 # ==========================================
 def create_premium_amazon_listing(input_bytes, product_scale=0.85):
-    """Takes image bytes, uses API to remove BG, adds studio lighting, and returns new image bytes."""
+    """Takes image bytes, removes BG, adds studio lighting, and returns new image bytes."""
     TARGET_SIZE = (1080, 1080)
     
-    # 1. Extract Product using Remove.bg API (Offloading the heavy lifting!)
-    response = requests.post(
-        'https://api.remove.bg/v1.0/removebg',
-        files={'image_file': ('image.jpg', input_bytes)},
-        data={'size': 'auto'},
-        headers={'X-Api-Key': st.secrets["REMOVE_BG_KEY"]},
-    )
-    
-    if response.status_code != 200:
-        st.error(f"Background removal failed: {response.text}")
-        return None # Stops the function if the API fails
-        
-    output_bytes = response.content
+    # 1. Extract Product
+    output_bytes = remove(input_bytes)
     product = Image.open(io.BytesIO(output_bytes)).convert("RGBA")
 
     # 2. Resize Product
@@ -327,6 +308,7 @@ if st.session_state.connected:
                                                         
                                                         if result:
                                                             st.success(f"✅ Image successfully uploaded to '{selected_product['name']}'!")
+                                                            st.balloons()
                                                         else:
                                                             st.error("❌ Failed to update image. Check your permissions.")
                                                     else:
